@@ -108,6 +108,7 @@ services:
     security_opt: [no-new-privileges:true]
   ops:
     image: python:3.12-slim
+    group_add: ['10002']
     profiles: [tools]
     entrypoint: [python, -B, /scripts/operator.py]
     environment:
@@ -125,6 +126,7 @@ services:
     tmpfs: [/tmp:size=16m,noexec,nosuid]
   guard:
     image: python:3.12-slim
+    group_add: ['10002']
     profiles: [automation]
     restart: unless-stopped
     entrypoint: [python, -B, /scripts/operator.py]

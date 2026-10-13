@@ -4,6 +4,8 @@ import copy
 import io
 import json
 import unittest
+from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from scripts.operator import (
@@ -20,11 +22,26 @@ class FakeRuntime:
         }
         self.calls = []
         self.fail_once = fail_once
+        self.locked = False
+        self.lock_entries = 0
+
+    @contextmanager
+    def mutation_lock(self):
+        if self.locked:
+            raise AssertionError("Nested mutation lock would deadlock")
+        self.locked = True
+        self.lock_entries += 1
+        try:
+            yield
+        finally:
+            self.locked = False
 
     def servers(self):
         return dict(self.state)
 
     def weight(self, name, weight):
+        if not self.locked:
+            raise AssertionError("Weight mutation must hold exclusive lock")
         self.calls.append((name, weight))
         if self.fail_once == (name, weight):
             self.fail_once = None
@@ -98,6 +115,8 @@ class TrafficTests(unittest.TestCase):
         self.assertEqual(runtime.calls, [("canary", 10), ("stable", 90), ("stable", 100), ("canary", 0)])
         self.assertEqual(runtime.state["stable"].weight, 100)
         self.assertEqual(runtime.state["canary"].weight, 0)
+        self.assertEqual(runtime.lock_entries, 1)
+        self.assertFalse(runtime.locked)
 
     def test_out_of_range_never_reaches_runtime(self):
         for value in (-1, 101):
@@ -187,6 +206,15 @@ class RuntimeProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(OperationError, "missing stable or canary"):
             runtime.servers()
 
+    def test_configured_weight_is_used_when_effective_weight_changes(self):
+        runtime = Runtime()
+        runtime.command = lambda _: (
+            "# pxname,svname,status,weight,uweight,\n"
+            "transaction_engine,stable,DOWN,0,95,\n"
+            "transaction_engine,canary,UP,5,5,\n"
+        )
+        self.assertEqual(runtime.servers()["stable"].weight, 95)
+
 
 class PrometheusResponseTests(unittest.TestCase):
     def test_nan_and_empty_results_are_missing_data(self):
@@ -207,6 +235,81 @@ class PrometheusResponseTests(unittest.TestCase):
             with self.assertRaisesRegex(OperationError, "local mock host"):
                 load("https://api.example.com", 1, 1, 1)
             request.assert_not_called()
+
+    def test_current_scrape_loss_blocks_even_with_historical_good_metrics(self):
+        prometheus = Prometheus()
+        expressions = []
+        def query(expression):
+            expressions.append(expression)
+            if "timestamp" in expression:
+                return 5
+            if 'slot="canary"' in expression:
+                return 0
+            return 1
+        prometheus.query = query
+        result = prometheus.analyze()
+        self.assertFalse(result.healthy)
+        self.assertTrue(any("canary" in reason and "not UP" in reason for reason in result.reasons))
+        self.assertFalse(any("transaction_requests_total" in expression for expression in expressions))
+
+    def test_stale_scrapes_block_promotion(self):
+        prometheus = Prometheus()
+        prometheus.query = lambda expression: 31 if "timestamp" in expression else 1
+        result = prometheus.analyze()
+        self.assertFalse(result.enough_data)
+        self.assertTrue(any("older than 30" in reason for reason in result.reasons))
+
+    def test_haproxy_and_required_stable_scrape_loss_block_promotion(self):
+        for selector in ('job="haproxy"', 'slot="stable"'):
+            prometheus = Prometheus()
+            prometheus.query = lambda expression: 5 if "timestamp" in expression else (0 if selector in expression else 1)
+            self.assertFalse(prometheus.analyze().healthy)
+
+    def test_full_rollout_needs_fresh_canary_and_proxy_without_stable(self):
+        prometheus = Prometheus()
+        expressions = []
+        def query(expression):
+            expressions.append(expression)
+            if "timestamp" in expression:
+                return 30
+            if expression.startswith("min(up"):
+                return 1
+            if "increase" in expression:
+                return 150
+            if 'status=~"5.."' in expression:
+                return 0
+            if "histogram_quantile" in expression:
+                return 0.2
+            return 1
+        prometheus.query = query
+        self.assertTrue(prometheus.analyze(require_baseline=False).healthy)
+        self.assertFalse(any('slot="stable"' in expression for expression in expressions))
+
+
+class MutationLockTests(unittest.TestCase):
+    def test_flock_release_even_when_operation_fails(self):
+        calls = []
+        fake_fcntl = SimpleNamespace(LOCK_EX=1, LOCK_NB=2, LOCK_UN=4,
+                                     flock=lambda descriptor, mode: calls.append(mode))
+        with patch.dict("sys.modules", {"fcntl": fake_fcntl}), \
+                patch("os.open", return_value=123), patch("os.close") as close:
+            with self.assertRaisesRegex(OperationError, "failed operation"):
+                with Runtime().mutation_lock():
+                    raise OperationError("failed operation")
+        self.assertEqual(calls, [3, 4])
+        close.assert_called_once_with(123)
+
+    def test_lock_contention_times_out_without_mutation(self):
+        def blocked(*_):
+            raise BlockingIOError("another process owns the lock")
+        fake_fcntl = SimpleNamespace(LOCK_EX=1, LOCK_NB=2, LOCK_UN=4, flock=blocked)
+        with patch.dict("sys.modules", {"fcntl": fake_fcntl}), \
+                patch("os.open", return_value=123), patch("os.close") as close, \
+                patch("time.monotonic", side_effect=[0, 5]):
+            with self.assertRaisesRegex(OperationError, "waited 5 seconds"):
+                with Runtime().mutation_lock():
+                    self.fail("contended lock must never enter mutation body")
+        close.assert_called_once_with(123)
 
 
 if __name__ == "__main__":

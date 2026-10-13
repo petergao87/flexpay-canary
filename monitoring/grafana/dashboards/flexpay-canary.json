@@ -889,7 +889,7 @@
       "id": 13,
       "type": "timeseries",
       "title": "HAProxy backend readiness and traffic weights",
-      "description": "UP state=1 means HAProxy readiness probes pass; weights are percentages only when both server user weights sum to 100. A DOWN server is excluded even if its configured weight is nonzero.",
+      "description": "UP state=1 means HAProxy readiness probes pass. Stable/canary primary weights sum to 100; the stable_fallback backup weight is excluded from this weight comparison. A DOWN server is excluded even if its configured weight is nonzero.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -967,7 +967,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "haproxy_server_uweight{job=\"haproxy\"}",
+          "expr": "haproxy_server_uweight{job=\"haproxy\",server=~\"stable|canary\"}",
           "legendFormat": "{{server}} weight",
           "refId": "B",
           "instant": false,

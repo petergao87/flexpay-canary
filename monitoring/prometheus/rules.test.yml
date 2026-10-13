@@ -1,0 +1,140 @@
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 15s
+
+tests:
+  - name: High error ratio waits for sustained duration
+    interval: 15s
+    input_series:
+      - series: 'transaction_requests_total{job="transaction-engine",version="v2.0",status="200"}'
+        values: '0+24x40'
+      - series: 'transaction_requests_total{job="transaction-engine",version="v2.0",status="500"}'
+        values: '0+6x40'
+      - series: 'transaction_requests_total{job="transaction-engine",version="v1.9",status="200"}'
+        values: '0+30x40'
+    promql_expr_test:
+      - expr: 'flexpay:error_ratio:5m{version="v2.0"}'
+        eval_time: 5m
+        exp_samples:
+          - labels: 'flexpay:error_ratio:5m{version="v2.0"}'
+            value: 0.2
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: CanaryHighErrorRate
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: CanaryHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              version: v2.0
+              severity: critical
+              action: rollback
+            exp_annotations:
+              summary: Canary error rate breached the rollout threshold
+              description: "v2.0 5xx ratio is 20% over 5m, with at least 100 requests, and has breached 1% absolute or stable + 2 percentage points for 3m. Run ops rollback; investigate provider and proxy errors."
+
+  - name: Low sample volume never triggers ratio rollback
+    interval: 15s
+    input_series:
+      - series: 'transaction_requests_total{job="transaction-engine",version="v2.0",status="200"}'
+        values: '0+1x48'
+      - series: 'transaction_requests_total{job="transaction-engine",version="v2.0",status="500"}'
+        values: '0+1x48'
+      - series: 'transaction_requests_total{job="transaction-engine",version="v1.9",status="200"}'
+        values: '0+40x48'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: CanaryHighErrorRate
+        exp_alerts: []
+
+  - name: Sustained high P95 triggers rollback
+    interval: 15s
+    input_series:
+      - series: 'transaction_requests_total{job="transaction-engine",version="v2.0",status="200"}'
+        values: '0+30x40'
+      - series: 'transaction_request_duration_seconds_bucket{job="transaction-engine",version="v2.0",le="0.4"}'
+        values: '0+0x40'
+      - series: 'transaction_request_duration_seconds_bucket{job="transaction-engine",version="v2.0",le="0.6"}'
+        values: '0+30x40'
+      - series: 'transaction_request_duration_seconds_bucket{job="transaction-engine",version="v2.0",le="+Inf"}'
+        values: '0+30x40'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: CanaryHighLatency
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: CanaryHighLatency
+        exp_alerts:
+          - exp_labels:
+              version: v2.0
+              severity: critical
+              action: rollback
+            exp_annotations:
+              summary: Canary P95 latency is above 400ms
+              description: "v2.0 P95 is 590ms over 5m with at least 100 requests, and the threshold has persisted for 3m. Run ops rollback. Histogram quantiles are approximate."
+
+  - name: Successful scrape with absent application metrics freezes promotion
+    interval: 15s
+    input_series:
+      - series: 'up{job="transaction-engine",slot="canary",instance="canary:8080"}'
+        values: '1+0x12'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: CanaryTelemetryMissing
+        exp_alerts:
+          - exp_labels:
+              job: transaction-engine
+              version: v2.0
+              severity: warning
+              action: freeze-promotion
+            exp_annotations:
+              summary: Canary is reachable but required metrics are missing
+              description: "A successful scrape does not prove rollout health. Freeze promotion and repair instrumentation; never interpret missing telemetry as zero errors."
+
+  - name: Unavailable target alerts independently of request sample size
+    interval: 15s
+    input_series:
+      - series: 'up{job="transaction-engine",slot="canary",instance="canary:8080"}'
+        values: '0+0x12'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: CanaryTargetUnavailable
+        exp_alerts:
+          - exp_labels:
+              job: transaction-engine
+              slot: canary
+              instance: canary:8080
+              severity: critical
+              action: rollback
+            exp_annotations:
+              summary: Canary metrics endpoint is unreachable
+              description: "Prometheus cannot scrape canary:8080. Freeze promotion, check HAProxy health and application readiness, and roll back canary traffic. Availability alerts do not wait for the request sample gate."
+      - eval_time: 2m
+        alertname: CanaryTelemetryMissing
+        exp_alerts: []
+
+  - name: Initialized idle counters are valid telemetry with no failures
+    interval: 15s
+    input_series:
+      - series: 'up{job="transaction-engine",slot="canary",instance="canary:8080"}'
+        values: '1+0x40'
+      - series: 'transaction_requests_total{job="transaction-engine",version="v2.0",status="200"}'
+        values: '0+0x40'
+      - series: 'transaction_request_duration_seconds_count{job="transaction-engine",version="v2.0"}'
+        values: '0+0x40'
+      - series: 'transaction_inflight_requests{job="transaction-engine",version="v2.0"}'
+        values: '0+0x40'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: CanaryHighErrorRate
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: CanaryTelemetryMissing
+        exp_alerts: []
+    promql_expr_test:
+      - expr: 'flexpay:error_ratio:5m{version="v2.0"}'
+        eval_time: 5m
+        exp_samples:
+          - labels: 'flexpay:error_ratio:5m{version="v2.0"}'
+            value: 0

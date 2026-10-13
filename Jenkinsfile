@@ -63,6 +63,9 @@ pipeline {
                     docker run --rm --entrypoint /bin/promtool \
                         -v "$WORKSPACE/monitoring/prometheus:/etc/prometheus:ro" \
                         prom/prometheus:v3.14.0 check config /etc/prometheus/prometheus.yml
+                    docker run --rm --entrypoint /bin/promtool \
+                        -v "$WORKSPACE/monitoring/prometheus:/etc/prometheus:ro" \
+                        prom/prometheus:v3.14.0 test rules /etc/prometheus/rules.test.yml
                     docker build --pull -f app/Dockerfile -t "$CANARY_IMAGE" \
                         --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" .
                     docker image inspect --format '{{.Id}}' "$CANARY_IMAGE" > .ci/canary-image-id.txt
@@ -82,7 +85,7 @@ pipeline {
                         -v "$WORKSPACE/scripts:/source/scripts:ro" \
                         -v "$WORKSPACE/tests:/source/tests:ro" \
                         --entrypoint sh "$CANARY_IMAGE" -c \
-                        'mkdir -p /tmp/project; cp -R /source/app /source/scripts /source/tests /tmp/project/; cd /tmp/project; python -B -m unittest discover -s tests -v' \
+                        'set -eu; mkdir -p /tmp/project; cp -R /source/app /source/scripts /source/tests /tmp/project/; cd /tmp/project; python -B -m unittest discover -s tests -v' \
                         > .ci/unit-tests.txt 2>&1; then
                         cat .ci/unit-tests.txt
                     else
@@ -98,12 +101,18 @@ pipeline {
                     set -eu
                     # Scan an exported image instead of giving the scanner the Docker socket.
                     docker image save "$CANARY_IMAGE" -o .ci/canary-image.tar
-                    docker run --rm \
+                    if docker run --rm \
                         -v "$WORKSPACE/.ci:/input:ro" \
                         -v "$WORKSPACE/.cache/trivy:/cache" \
                         aquasec/trivy:0.75.0 image --input /input/canary-image.tar \
                         --cache-dir /cache --scanners vuln --severity HIGH,CRITICAL \
-                        --ignore-unfixed --exit-code 1 --no-progress
+                        --ignore-unfixed --exit-code 1 --no-progress \
+                        > .ci/trivy-report.txt 2>&1; then
+                        cat .ci/trivy-report.txt
+                    else
+                        cat .ci/trivy-report.txt
+                        exit 1
+                    fi
                 '''
             }
         }
@@ -149,7 +158,16 @@ pipeline {
                     docker compose run --rm ops rollback
                     docker compose up -d --no-deps --no-build --pull never \
                         --wait --wait-timeout 90 canary
-                    docker compose run --rm ops traffic 5
+                    # HAProxy DNS/health checks can trail the container health check.
+                    ready=false
+                    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+                        if docker compose run --rm ops traffic 5; then
+                            ready=true
+                            break
+                        fi
+                        sleep 2
+                    done
+                    test "$ready" = true
                     docker run --rm --read-only --tmpfs /tmp:size=32m \
                         --cap-drop ALL --security-opt no-new-privileges:true \
                         --network "${COMPOSE_PROJECT_NAME}_control" \
@@ -189,6 +207,9 @@ pipeline {
             steps {
                 sh '''
                     set -eu
+                    # An approval wait may expire the prior 5m sample window.
+                    docker compose run --rm ops load --duration 240 --rps 30
+                    docker compose run --rm ops analyze
                     # Each step rechecks readiness, sample size, errors and P95.
                     for percentage in 25 50 100; do
                         docker compose run --rm ops traffic "$percentage" --approve

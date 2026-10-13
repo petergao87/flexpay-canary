@@ -18,6 +18,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 
@@ -75,7 +76,10 @@ class Runtime:
                     "stable", "canary", "stable_fallback"
                 }:
                     name = row["svname"]
-                    servers[name] = Server(name, row["status"], int(row["weight"]))
+                    # HAProxy 3.2 exposes uweight: the configured weight is
+                    # distinct from effective weight during health changes.
+                    weight = row.get("uweight") or row["weight"]
+                    servers[name] = Server(name, row["status"], int(weight))
         except (KeyError, TypeError, ValueError) as exc:
             raise OperationError("HAProxy returned malformed server statistics") from exc
         if "stable" not in servers or "canary" not in servers:
@@ -89,6 +93,41 @@ class Runtime:
         actual = self.servers()[server].weight
         if actual != value:
             raise OperationError(f"Weight verification failed for {server}: wanted {value}, got {actual}")
+
+    @contextmanager
+    def mutation_lock(self):
+        """Serialize manual operations and the guard across ops containers."""
+        try:
+            import fcntl
+        except ImportError as exc:
+            raise OperationError("Traffic mutations require the Linux ops container (Unix flock)") from exc
+        path = os.environ.get("HAPROXY_LOCK", os.path.join(os.path.dirname(self.path), "operator.lock"))
+        try:
+            descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+        except OSError as exc:
+            raise OperationError(f"Cannot open operator lock: {exc}") from exc
+        acquired = False
+        deadline = time.monotonic() + 5
+        try:
+            while True:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    acquired = True
+                    break
+                except BlockingIOError:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise OperationError("Another traffic operation holds the lock; waited 5 seconds")
+                    time.sleep(min(0.05, remaining))
+                except OSError as exc:
+                    raise OperationError(f"Cannot acquire operator lock: {exc}") from exc
+            yield
+        finally:
+            try:
+                if acquired:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+            finally:
+                os.close(descriptor)
 
 
 class Prometheus:
@@ -112,6 +151,26 @@ class Prometheus:
             raise OperationError(f"Prometheus unavailable or returned invalid data: {exc}") from exc
 
     def analyze(self, require_baseline=True):
+        selectors = {
+            "canary": 'up{job="transaction-engine",slot="canary"}',
+            "haproxy": 'up{job="haproxy"}',
+        }
+        if require_baseline:
+            selectors["stable"] = 'up{job="transaction-engine",slot="stable"}'
+        scrape_targets = {}
+        scrape_reasons = []
+        for name, selector in selectors.items():
+            up = self.query(f"min({selector})")
+            age = self.query(f"max(time() - timestamp({selector}))")
+            scrape_targets[name] = {"up": up, "age_seconds": age}
+            if up != 1:
+                scrape_reasons.append(f"Current {name} Prometheus scrape is not UP")
+            if age is None or age < 0 or age > 30:
+                scrape_reasons.append(f"Current {name} Prometheus scrape is missing or older than 30 seconds")
+        if scrape_reasons:
+            # Five-minute rate windows can retain good-looking samples after
+            # a target disappears. Those samples cannot authorize promotion.
+            return Analysis(False, False, tuple(scrape_reasons), {"scrape_targets": scrape_targets})
         observations = {}
         for version in (STABLE, CANARY):
             label = f'version="{version}"'
@@ -126,6 +185,7 @@ class Prometheus:
                     f"transaction_request_duration_seconds_bucket{{{label}}}[5m])))"
                 ),
             }
+        observations["scrape_targets"] = scrape_targets
         return analyze_observations(observations, require_baseline=require_baseline)
 
 
@@ -186,7 +246,7 @@ def analyze_observations(observations, require_baseline=True):
     return Analysis(enough, bad, tuple(reasons), observations)
 
 
-def rollback(runtime):
+def _rollback_locked(runtime):
     # These are separate runtime commands: restoring a route precedes disabling one.
     runtime.weight("stable", 100)
     if not runtime.servers()["stable"].up:
@@ -195,11 +255,21 @@ def rollback(runtime):
     return runtime.servers()
 
 
+def rollback(runtime):
+    with runtime.mutation_lock():
+        return _rollback_locked(runtime)
+
+
 def traffic(runtime, percentage, approve=False, prometheus=None):
     if not 0 <= percentage <= 100:
         raise OperationError("Canary percentage must be between 0 and 100")
     if percentage == 0:
         return rollback(runtime)
+    with runtime.mutation_lock():
+        return _traffic_locked(runtime, percentage, approve, prometheus)
+
+
+def _traffic_locked(runtime, percentage, approve, prometheus):
     current = runtime.servers()
     total = current["stable"].weight + current["canary"].weight
     current_percentage = current["canary"].weight * 100 / total if total else 0
@@ -224,7 +294,7 @@ def traffic(runtime, percentage, approve=False, prometheus=None):
         return runtime.servers()
     except OperationError as exc:
         try:
-            rollback(runtime)
+            _rollback_locked(runtime)
             recovery = "Recovered to stable=100, canary=0"
         except OperationError as recovery_error:
             recovery = f"Automatic recovery failed: {recovery_error}; inspect HAProxy immediately"

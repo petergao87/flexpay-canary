@@ -1,0 +1,41 @@
+test_environment_configuration_and_rejects_invalid_values (test_app.ConfigTests.test_environment_configuration_and_rejects_invalid_values) ... ok
+test_authorization_and_prometheus_outcome_histogram (test_app.HTTPTests.test_authorization_and_prometheus_outcome_histogram) ... ok
+test_client_validation_is_bounded_and_does_not_count_business_failures (test_app.HTTPTests.test_client_validation_is_bounded_and_does_not_count_business_failures) ... ok
+test_draining_rejects_new_work_but_finishes_admitted_request (test_app.HTTPTests.test_draining_rejects_new_work_but_finishes_admitted_request) ... ok
+test_fault_injection_and_declines_have_distinct_metrics (test_app.HTTPTests.test_fault_injection_and_declines_have_distinct_metrics) ... ok
+test_keys_produce_consistent_demo_ids_without_claiming_idempotency (test_app.HTTPTests.test_keys_produce_consistent_demo_ids_without_claiming_idempotency) ... ok
+test_missing_or_conflicting_lengths_are_rejected (test_app.HTTPTests.test_missing_or_conflicting_lengths_are_rejected) ... ok
+test_readiness_version_and_initial_metrics (test_app.HTTPTests.test_readiness_version_and_initial_metrics) ... ok
+test_secret_files_reload_and_readiness_recovers_without_restart (test_app.HTTPTests.test_secret_files_reload_and_readiness_recovers_without_restart) ... ok
+test_structured_logs_do_not_include_secrets_card_data_or_merchant_input (test_app.HTTPTests.test_structured_logs_do_not_include_secrets_card_data_or_merchant_input) ... ok
+test_concurrent_authorizations_finish_and_report_version (test_integration.HttpIntegrationTests.test_concurrent_authorizations_finish_and_report_version) ... skipped 'opt in with FLEXPAY_INTEGRATION=1'
+test_health_identifies_version_and_readiness (test_integration.HttpIntegrationTests.test_health_identifies_version_and_readiness) ... skipped 'opt in with FLEXPAY_INTEGRATION=1'
+test_invalid_payment_is_4xx (test_integration.HttpIntegrationTests.test_invalid_payment_is_4xx) ... skipped 'opt in with FLEXPAY_INTEGRATION=1'
+test_at_full_rollout_absolute_checks_work_without_baseline (test_ops.AnalysisTests.test_at_full_rollout_absolute_checks_work_without_baseline) ... ok
+test_enough_healthy_data_allows_gate (test_ops.AnalysisTests.test_enough_healthy_data_allows_gate) ... ok
+test_error_latency_regressions_are_detected (test_ops.AnalysisTests.test_error_latency_regressions_are_detected) ... ok
+test_failure_window_requires_three_continuous_minutes (test_ops.AnalysisTests.test_failure_window_requires_three_continuous_minutes) ... ok
+test_missing_data_is_never_healthy (test_ops.AnalysisTests.test_missing_data_is_never_healthy) ... ok
+test_threshold_equality_is_healthy (test_ops.AnalysisTests.test_threshold_equality_is_healthy) ... ok
+test_load_preflight_refuses_a_non_mock (test_ops.PrometheusResponseTests.test_load_preflight_refuses_a_non_mock) ... ok
+test_load_rejects_external_hosts_before_network_request (test_ops.PrometheusResponseTests.test_load_rejects_external_hosts_before_network_request) ... ok
+test_nan_and_empty_results_are_missing_data (test_ops.PrometheusResponseTests.test_nan_and_empty_results_are_missing_data) ... ok
+test_configured_weight_is_used_when_effective_weight_changes (test_ops.RuntimeProtocolTests.test_configured_weight_is_used_when_effective_weight_changes) ... ok
+test_missing_server_rows_fail_closed (test_ops.RuntimeProtocolTests.test_missing_server_rows_fail_closed) ... ok
+test_mutation_is_verified_against_runtime_state (test_ops.RuntimeProtocolTests.test_mutation_is_verified_against_runtime_state) ... ok
+test_nonempty_mutation_response_is_rejected (test_ops.RuntimeProtocolTests.test_nonempty_mutation_response_is_rejected) ... ok
+test_stat_csv_filters_backend_and_parses_health_weights (test_ops.RuntimeProtocolTests.test_stat_csv_filters_backend_and_parses_health_weights) ... ok
+test_approved_promotion_requires_healthy_samples (test_ops.TrafficTests.test_approved_promotion_requires_healthy_samples) ... ok
+test_beyond_ten_percent_requires_manual_approval (test_ops.TrafficTests.test_beyond_ten_percent_requires_manual_approval) ... ok
+test_initial_probe_is_ordered_and_needs_no_metric_history (test_ops.TrafficTests.test_initial_probe_is_ordered_and_needs_no_metric_history) ... ok
+test_out_of_range_never_reaches_runtime (test_ops.TrafficTests.test_out_of_range_never_reaches_runtime) ... ok
+test_partial_change_recovers_to_stable (test_ops.TrafficTests.test_partial_change_recovers_to_stable) ... ok
+test_reduction_does_not_require_new_approval (test_ops.TrafficTests.test_reduction_does_not_require_new_approval) ... ok
+test_rollback_preserves_canary_when_stable_is_unavailable (test_ops.TrafficTests.test_rollback_preserves_canary_when_stable_is_unavailable) ... ok
+test_rollback_restores_stable_before_disabling_canary (test_ops.TrafficTests.test_rollback_restores_stable_before_disabling_canary) ... ok
+test_unavailable_canary_blocks_increase_without_mutation (test_ops.TrafficTests.test_unavailable_canary_blocks_increase_without_mutation) ... ok
+
+----------------------------------------------------------------------
+Ran 36 tests in 0.732s
+
+OK (skipped=3)
