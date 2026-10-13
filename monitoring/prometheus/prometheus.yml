@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 5s
+  external_labels:
+    environment: local-staging
+    service: transaction-engine
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: transaction-engine
+    metrics_path: /metrics
+    static_configs:
+      - targets: [stable:8080]
+        labels:
+          slot: stable
+      - targets: [canary:8080]
+        labels:
+          slot: canary
+
+  - job_name: haproxy
+    metrics_path: /metrics
+    static_configs:
+      - targets: [proxy:8404]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]

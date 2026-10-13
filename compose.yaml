@@ -1,0 +1,160 @@
+name: flexpay-canary
+
+x-engine: &engine
+  build:
+    context: .
+    dockerfile: app/Dockerfile
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  tmpfs: [/tmp:size=16m,noexec,nosuid]
+  stop_grace_period: 15s
+  networks: [app]
+  secrets: [database_url, provider_api_key]
+  healthcheck:
+    test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+    interval: 2s
+    timeout: 3s
+    retries: 3
+    start_period: 5s
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: '3'}
+
+services:
+  stable:
+    <<: *engine
+    image: ${STABLE_IMAGE:-flexpay/transaction-engine:v1.9}
+    environment:
+      VERSION: v1.9
+      DELAY_MIN_MS: '250'
+      DELAY_MAX_MS: '400'
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      PROVIDER_API_KEY_FILE: /run/secrets/provider_api_key
+  canary:
+    <<: *engine
+    image: ${CANARY_IMAGE:-flexpay/transaction-engine:v2.0}
+    environment:
+      VERSION: v2.0
+      DELAY_MIN_MS: ${CANARY_DELAY_MIN_MS:-120}
+      DELAY_MAX_MS: ${CANARY_DELAY_MAX_MS:-220}
+      ERROR_RATE: ${CANARY_ERROR_RATE:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL_FILE: /run/secrets/database_url
+      PROVIDER_API_KEY_FILE: /run/secrets/provider_api_key
+  proxy:
+    build:
+      context: .
+      dockerfile: proxy/Dockerfile
+    image: flexpay/haproxy:local
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp:size=16m,noexec,nosuid]
+    stop_signal: SIGUSR1
+    stop_grace_period: 15s
+    ports: [127.0.0.1:8080:8080]
+    volumes:
+      - haproxy-runtime:/run/haproxy
+    networks: [app, control]
+    depends_on:
+      stable: {condition: service_healthy}
+      # A broken canary must never block startup of the stable path.
+      canary: {condition: service_started}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8404/health]
+      interval: 5s
+      timeout: 2s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    ports: [127.0.0.1:9090:9090]
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    networks: [app, control]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  grafana:
+    image: grafana/grafana:13.2.2
+    restart: unless-stopped
+    ports: [127.0.0.1:3000:3000]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+    secrets: [grafana_admin_password]
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks: [control]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  ops:
+    image: python:3.12-slim
+    profiles: [tools]
+    entrypoint: [python, -B, /scripts/operator.py]
+    environment:
+      PYTHONDONTWRITEBYTECODE: '1'
+      HAPROXY_SOCKET: /run/haproxy/admin.sock
+      PROMETHEUS_URL: http://prometheus:9090
+      FLEXPAY_BASE_URL: http://proxy:8080
+    volumes:
+      - ./scripts:/scripts:ro
+      - haproxy-runtime:/run/haproxy
+    networks: [control]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp:size=16m,noexec,nosuid]
+  guard:
+    image: python:3.12-slim
+    profiles: [automation]
+    restart: unless-stopped
+    entrypoint: [python, -B, /scripts/operator.py]
+    command: [watch, --auto-rollback]
+    environment:
+      PYTHONDONTWRITEBYTECODE: '1'
+      HAPROXY_SOCKET: /run/haproxy/admin.sock
+      PROMETHEUS_URL: http://prometheus:9090
+    volumes:
+      - ./scripts:/scripts:ro
+      - haproxy-runtime:/run/haproxy
+    networks: [control]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp:size=16m,noexec,nosuid]
+    depends_on:
+      proxy: {condition: service_healthy}
+      prometheus: {condition: service_started}
+
+networks:
+  app:
+    internal: true
+  control:
+    internal: true
+volumes:
+  haproxy-runtime:
+  prometheus-data:
+  grafana-data:
+secrets:
+  database_url: {file: ./.secrets/database_url}
+  provider_api_key: {file: ./.secrets/provider_api_key}
+  grafana_admin_password: {file: ./.secrets/grafana_admin_password}

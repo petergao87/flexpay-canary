@@ -1,0 +1,152 @@
+groups:
+  - name: flexpay-recording
+    interval: 15s
+    rules:
+      - record: flexpay:requests:rate1m
+        expr: sum by (version) (rate(transaction_requests_total{job="transaction-engine"}[1m]))
+      - record: flexpay:requests:rate5m
+        expr: sum by (version) (rate(transaction_requests_total{job="transaction-engine"}[5m]))
+      - record: flexpay:requests:increase5m
+        expr: sum by (version) (increase(transaction_requests_total{job="transaction-engine"}[5m]))
+      - record: flexpay:errors:rate5m
+        expr: |
+          sum by (version) (rate(transaction_requests_total{job="transaction-engine",status=~"5.."}[5m]))
+          or on (version) (0 * flexpay:requests:rate5m)
+      - record: flexpay:error_ratio:5m
+        expr: flexpay:errors:rate5m / clamp_min(flexpay:requests:rate5m, 0.000000001)
+      - record: flexpay:latency_p50:5m
+        expr: histogram_quantile(0.50, sum by (version, le) (rate(transaction_request_duration_seconds_bucket{job="transaction-engine"}[5m])))
+      - record: flexpay:latency_p95:5m
+        expr: histogram_quantile(0.95, sum by (version, le) (rate(transaction_request_duration_seconds_bucket{job="transaction-engine"}[5m])))
+      - record: flexpay:latency_p99:5m
+        expr: histogram_quantile(0.99, sum by (version, le) (rate(transaction_request_duration_seconds_bucket{job="transaction-engine"}[5m])))
+
+  - name: flexpay-canary-health
+    interval: 15s
+    rules:
+      - alert: CanaryHighErrorRate
+        expr: |
+          (
+            flexpay:error_ratio:5m{version="v2.0"} > 0.01
+            or
+            flexpay:error_ratio:5m{version="v2.0"} >
+              (scalar(flexpay:error_ratio:5m{version="v1.9"}) + 0.02)
+          )
+          and on (version) (flexpay:requests:increase5m{version="v2.0"} >= 100)
+        for: 3m
+        labels:
+          severity: critical
+          action: rollback
+        annotations:
+          summary: Canary error rate breached the rollout threshold
+          description: "v2.0 5xx ratio is {{ $value | humanizePercentage }} over 5m, with at least 100 requests, and has breached 1% absolute or stable + 2 percentage points for 3m. Run ops rollback; investigate provider and proxy errors."
+
+      - alert: CanaryHighLatency
+        expr: |
+          (flexpay:latency_p95:5m{version="v2.0"} > 0.4)
+          and on (version) (flexpay:requests:increase5m{version="v2.0"} >= 100)
+        for: 3m
+        labels:
+          severity: critical
+          action: rollback
+        annotations:
+          summary: Canary P95 latency is above 400ms
+          description: "v2.0 P95 is {{ $value | humanizeDuration }} over 5m with at least 100 requests, and the threshold has persisted for 3m. Run ops rollback. Histogram quantiles are approximate."
+
+      - alert: CanaryTargetUnavailable
+        expr: up{job="transaction-engine",slot="canary"} == 0
+        for: 15s
+        labels:
+          severity: critical
+          action: rollback
+        annotations:
+          summary: Canary metrics endpoint is unreachable
+          description: "Prometheus cannot scrape canary:8080. Freeze promotion, check HAProxy health and application readiness, and roll back canary traffic. Availability alerts do not wait for the request sample gate."
+
+      - alert: StableTargetUnavailable
+        expr: up{job="transaction-engine",slot="stable"} == 0
+        for: 15s
+        labels:
+          severity: critical
+          action: page
+        annotations:
+          summary: Stable rollback target is unreachable
+          description: "Prometheus cannot scrape stable:8080. Freeze promotion and restore stable; do not assume rollback to an unhealthy target is safe."
+
+      - alert: CanaryBackendUnhealthy
+        expr: |
+          (haproxy_server_status{job="haproxy",server="canary",state="UP"} == 0)
+          and on () (up{job="haproxy"} == 1)
+        for: 15s
+        labels:
+          severity: critical
+          action: rollback
+        annotations:
+          summary: HAProxy cannot use the canary backend
+          description: "HAProxy reports canary DOWN, including failed readiness or a proxy-to-canary network partition. It excludes failed servers automatically; persist rollback with ops rollback."
+
+      - alert: StableBackendUnhealthy
+        expr: |
+          (haproxy_server_status{job="haproxy",server="stable",state="UP"} == 0)
+          and on () (up{job="haproxy"} == 1)
+        for: 15s
+        labels:
+          severity: critical
+          action: page
+        annotations:
+          summary: HAProxy cannot use the stable rollback backend
+          description: "Restore stable before changing rollout traffic; preserve the known stable image."
+
+      - alert: CanaryTelemetryMissing
+        expr: |
+          (
+            absent(transaction_requests_total{job="transaction-engine",version="v2.0"})
+            or absent(transaction_request_duration_seconds_count{job="transaction-engine",version="v2.0"})
+            or absent(transaction_inflight_requests{job="transaction-engine",version="v2.0"})
+          )
+          and on () (up{job="transaction-engine",slot="canary"} == 1)
+        for: 1m
+        labels:
+          severity: warning
+          action: freeze-promotion
+        annotations:
+          summary: Canary is reachable but required metrics are missing
+          description: "A successful scrape does not prove rollout health. Freeze promotion and repair instrumentation; never interpret missing telemetry as zero errors."
+
+      - alert: StableTelemetryMissing
+        expr: |
+          (
+            absent(transaction_requests_total{job="transaction-engine",version="v1.9"})
+            or absent(transaction_request_duration_seconds_count{job="transaction-engine",version="v1.9"})
+            or absent(transaction_inflight_requests{job="transaction-engine",version="v1.9"})
+          )
+          and on () (up{job="transaction-engine",slot="stable"} == 1)
+        for: 1m
+        labels:
+          severity: warning
+          action: freeze-promotion
+        annotations:
+          summary: Stable comparison telemetry is missing
+          description: "Freeze promotion until the stable baseline can be compared reliably."
+
+      - alert: HAProxyTargetUnavailable
+        expr: up{job="haproxy"} == 0
+        for: 15s
+        labels:
+          severity: critical
+          action: page
+        annotations:
+          summary: HAProxy metrics endpoint is unreachable
+          description: "Check proxy availability independently of the application targets. This demo has one proxy and is not a production HA topology."
+
+      - alert: CanarySampleTooSmall
+        expr: |
+          (flexpay:requests:increase5m{version="v2.0"} < 100)
+          and on () (sum(haproxy_server_uweight{job="haproxy",server="canary"}) > 0)
+        for: 5m
+        labels:
+          severity: info
+          action: freeze-promotion
+        annotations:
+          summary: Canary has fewer than 100 requests in the last 5m
+          description: "Collect more representative traffic before promotion. Low volume does not establish that the canary is healthy."

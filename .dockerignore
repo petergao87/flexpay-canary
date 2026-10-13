@@ -1,0 +1,12 @@
+.git
+.secrets
+.env
+.env.*
+__pycache__
+*.py[cod]
+.venv
+.tools
+.cache
+tests
+evidence
+*.zip
