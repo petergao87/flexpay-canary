@@ -353,7 +353,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/authorize":
             self._error(404, "not_found")
             return
-        start = time.monotonic()
+        # perf_counter stays monotonic while retaining sub-millisecond
+        # resolution on Windows Python 3.12 (monotonic uses GetTickCount64).
+        start = time.perf_counter()
         status = 500
         outcome = None
         admitted = False
@@ -395,7 +397,7 @@ class Handler(BaseHTTPRequestHandler):
             # A disconnected client must not leak its headers/body into logs.
             pass
         finally:
-            duration = time.monotonic() - start
+            duration = time.perf_counter() - start
             self.state.observe(status, duration, outcome, admitted)
             emit("authorization", version=self.state.config.version, status=status, duration_ms=round(duration * 1000, 3))
 
