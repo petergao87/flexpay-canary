@@ -12,20 +12,15 @@ Repository: **https://github.com/petergao87/flexpay-canary**. It must remain pub
 
 Implemented a self-contained Docker Compose canary for a mock payment transaction engine, with v1.9/v2.0 running concurrently, HAProxy runtime weighted routing, one-command rollback, Prometheus/Grafana version comparison, optional automated rollback, mounted secrets, and a Jenkins approval-gated staging pipeline. README contains setup, phased rollout and failure drills; DESIGN_DECISIONS.md explains payment retry risks, thresholds, rollback capacity and production trade-offs. See evidence/VALIDATION.md for checks actually performed. This is a local deployment demonstration; real acquirer calls, durable payment state, multi-host HA and production deployment are deliberately outside scope.
 
-## Publishing from an authenticated GitHub CLI
+## Published repository
 
-The project is ready for a dedicated repository. These commands publish only this project, not the surrounding workspace. Replace the account if an organization is intended, and obtain the owner's approval before public release.
+The completed solution is already published at [petergao87/flexpay-canary](https://github.com/petergao87/flexpay-canary). Use that address for both URL fields in the submission form.
 
-```bash
-gh auth login
-gh repo create YOUR-ACCOUNT/flexpay-canary --public --source . --remote origin --push
-```
-
-Or create an empty **public** repository in GitHub, copy its verified URL and then:
+To obtain a local copy:
 
 ```bash
-git remote add origin https://github.com/YOUR-ACCOUNT/flexpay-canary.git
-git push -u origin main
+git clone https://github.com/petergao87/flexpay-canary.git
+cd flexpay-canary
 ```
 
 Do not publish `.secrets`, `.env`, local cache/data directories or any unrelated existing project. There is no need to expose the payment mock or Grafana on the public Internet for this repository-based submission.
