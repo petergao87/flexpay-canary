@@ -8,7 +8,7 @@ x-engine: &engine
   read_only: true
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
-  tmpfs: [/tmp:size=16m,noexec,nosuid]
+  tmpfs: ['/tmp:size=16m,noexec,nosuid']
   stop_grace_period: 15s
   networks: [app]
   secrets: [database_url, provider_api_key]
@@ -53,7 +53,7 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    tmpfs: [/tmp:size=16m,noexec,nosuid]
+    tmpfs: ['/tmp:size=16m,noexec,nosuid']
     stop_signal: SIGUSR1
     stop_grace_period: 15s
     ports: [127.0.0.1:8080:8080]
@@ -123,7 +123,7 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    tmpfs: [/tmp:size=16m,noexec,nosuid]
+    tmpfs: ['/tmp:size=16m,noexec,nosuid']
   guard:
     image: python:3.12-slim
     group_add: ['10002']
@@ -142,7 +142,7 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    tmpfs: [/tmp:size=16m,noexec,nosuid]
+    tmpfs: ['/tmp:size=16m,noexec,nosuid']
     depends_on:
       proxy: {condition: service_healthy}
       prometheus: {condition: service_started}
