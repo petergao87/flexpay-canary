@@ -22,6 +22,13 @@ flowchart LR
 
 Only the API, Prometheus and Grafana are published, on **127.0.0.1**. Neither application version nor the privileged HAProxy control socket is exposed on the host. The operator has no Docker socket or cloud credentials. Published local ports are not suitable as a public submission URL; submit the public Git repository.
 
+There are **two independent application containers**, `stable` (v1.9) and `canary` (v2.0), behind one API URL. A single `/health` response identifies the version selected for that request. `docker compose ps` shows both instances, and the dashboard separates their traffic. You can inspect each directly inside its container:
+
+```bash
+docker compose exec stable python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8080/version').read().decode())"
+docker compose exec canary python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8080/version').read().decode())"
+```
+
 ## Quick start
 
 Requirements: a Linux Docker Engine, Docker Compose supporting `up --wait`, and approximately 2 GB free for images. On Windows 11 use Docker Desktop in Linux-container/WSL2 mode, or Docker Engine installed inside WSL2. A Windows `dockerd.exe` service alone cannot run these Linux images. Put your Docker image store and build cache on a drive with sufficient free space.
@@ -29,7 +36,7 @@ Requirements: a Linux Docker Engine, Docker Compose supporting `up --wait`, and 
 Windows PowerShell with Docker Desktop:
 
 ```powershell
-git clone https://github.com/YOUR-ACCOUNT/flexpay-canary.git
+git clone https://github.com/petergao87/flexpay-canary.git
 cd flexpay-canary
 ./scripts/init-secrets.ps1
 docker compose config --quiet
@@ -42,7 +49,7 @@ docker compose run --rm ops load --duration 300 --rps 30
 Linux or WSL2 (run in the repository directory):
 
 ```bash
-./scripts/init-secrets.sh
+sh ./scripts/init-secrets.sh
 docker compose config --quiet
 docker compose up -d --build --wait --wait-timeout 120
 docker compose run --rm ops status
@@ -84,12 +91,16 @@ If the stable server is unhealthy, rollback fails visibly and preserves canary t
 
 ## Metrics and canary health
 
-- Grafana: [http://127.0.0.1:3000](http://127.0.0.1:3000), user `admin`. Read the generated `.secrets/grafana_admin_password` locally to sign in; never paste it into a ticket, submission or logs. Dashboard: **FlexPay Canary Deployment** (provisioned automatically).
+- Grafana: [FlexPay Canary · Transaction Engine](http://127.0.0.1:3000/d/flexpay-canary), user `admin`. Read the generated `.secrets/grafana_admin_password` locally to sign in; never paste it into a ticket, submission or logs. The dashboard is provisioned automatically.
 - Prometheus targets: [http://127.0.0.1:9090/targets](http://127.0.0.1:9090/targets).
 - Prometheus alerts: [http://127.0.0.1:9090/alerts](http://127.0.0.1:9090/alerts). Rules are evaluated every 15 seconds. Alertmanager/email/Slack delivery is not configured.
 - CLI analysis: `docker compose run --rm ops analyze`. A healthy result requires adequate samples and valid measurements; missing metrics are not interpreted as zero errors.
 
 The dashboard shows request rate, observed traffic share, 5xx percentage, P50/P95/P99, request counts, active requests, application target health and HAProxy transport/error signals. Latency histograms approximate quantiles; stable averages around 325 ms, and canary around 170 ms under the default mock delays. Error metrics cover `/authorize` requests and exclude readiness/metrics scrapes. Declines are business outcomes, separate from 5xx availability failures.
+
+Actual local dashboard after restoring the healthy 95/5 baseline. The load generator had finished when this screenshot was captured, so latest RPS can return to zero while the historical healthy traffic remains visible. The [fault-drill screenshot](evidence/grafana-dashboard.png) separately shows the 20% error injection and automatic rollback.
+
+![Actual Grafana healthy canary baseline](evidence/grafana-healthy.png)
 
 | Gate | Action |
 |---|---|
@@ -191,7 +202,7 @@ docker compose exec prometheus promtool check rules /etc/prometheus/alerts.yml
 
 HTTP integration tests are opt-in; see the header in `tests/test_integration.py` for the environment flag. They target the mock only. For this project Peter approved local static, unit, build and integration validation before execution. Follow your own approval requirements before rerunning tests.
 
-[Jenkinsfile](Jenkinsfile) defines a dedicated staging pipeline: manual validation approval, image build, Dockerfile linting, unit/API validation, Trivy scanning, canary-only deployment, initial 5% rollout, and a separate manual gate before increasing beyond 10%. It requires a prepared dedicated Linux Docker agent, an already-running stable stack and secure secret files. Production deployment is intentionally not connected. The `--approve` CLI flag is an operator acknowledgement rather than an access-control boundary; Jenkins authorization and agent isolation provide the real approval boundary.
+[Jenkinsfile](Jenkinsfile) defines a dedicated staging pipeline: manual validation approval, image build, Dockerfile linting, unit/API validation, Trivy scanning, canary-only deployment, initial 5% rollout, and a separate manual gate before increasing beyond 10%. It requires a prepared dedicated Linux Docker agent, an already-running stable stack and secure secret files. The default project is `flexpay-canary-staging`; see [monitoring/README.md](monitoring/README.md) for bootstrap and the three Jenkins file-credential IDs. Production deployment is intentionally not connected. The `--approve` CLI flag is an operator acknowledgement rather than an access-control boundary; Jenkins authorization and agent isolation provide the real approval boundary.
 
 ## Repository guide
 

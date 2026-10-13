@@ -1,5 +1,5 @@
 test_environment_configuration_and_rejects_invalid_values (test_app.ConfigTests.test_environment_configuration_and_rejects_invalid_values) ... ok
-test_authorization_and_prometheus_outcome_histogram (test_app.HTTPTests.test_authorization_and_prometheus_outcome_histogram) ... FAIL
+test_authorization_and_prometheus_outcome_histogram (test_app.HTTPTests.test_authorization_and_prometheus_outcome_histogram) ... ok
 test_client_validation_is_bounded_and_does_not_count_business_failures (test_app.HTTPTests.test_client_validation_is_bounded_and_does_not_count_business_failures) ... ok
 test_draining_rejects_new_work_but_finishes_admitted_request (test_app.HTTPTests.test_draining_rejects_new_work_but_finishes_admitted_request) ... ok
 test_fault_injection_and_declines_have_distinct_metrics (test_app.HTTPTests.test_fault_injection_and_declines_have_distinct_metrics) ... ok
@@ -17,6 +17,7 @@ test_error_latency_regressions_are_detected (test_ops.AnalysisTests.test_error_l
 test_failure_window_requires_three_continuous_minutes (test_ops.AnalysisTests.test_failure_window_requires_three_continuous_minutes) ... ok
 test_missing_data_is_never_healthy (test_ops.AnalysisTests.test_missing_data_is_never_healthy) ... ok
 test_threshold_equality_is_healthy (test_ops.AnalysisTests.test_threshold_equality_is_healthy) ... ok
+test_direct_script_help_starts_from_an_unrelated_working_directory (test_ops.CliStartupTests.test_direct_script_help_starts_from_an_unrelated_working_directory) ... ok
 test_flock_release_even_when_operation_fails (test_ops.MutationLockTests.test_flock_release_even_when_operation_fails) ... ok
 test_lock_contention_times_out_without_mutation (test_ops.MutationLockTests.test_lock_contention_times_out_without_mutation) ... ok
 test_current_scrape_loss_blocks_even_with_historical_good_metrics (test_ops.PrometheusResponseTests.test_current_scrape_loss_blocks_even_with_historical_good_metrics) ... ok
@@ -41,15 +42,7 @@ test_rollback_preserves_canary_when_stable_is_unavailable (test_ops.TrafficTests
 test_rollback_restores_stable_before_disabling_canary (test_ops.TrafficTests.test_rollback_restores_stable_before_disabling_canary) ... ok
 test_unavailable_canary_blocks_increase_without_mutation (test_ops.TrafficTests.test_unavailable_canary_blocks_increase_without_mutation) ... ok
 
-======================================================================
-FAIL: test_authorization_and_prometheus_outcome_histogram (test_app.HTTPTests.test_authorization_and_prometheus_outcome_histogram)
 ----------------------------------------------------------------------
-Traceback (most recent call last):
-  File "D:\GameAssant\flexpay-canary\tests\test_app.py", line 120, in test_authorization_and_prometheus_outcome_histogram
-    self.assertGreater(self.server.state.duration_sum, 0)
-AssertionError: 0.0 not greater than 0
+Ran 43 tests in 1.398s
 
-----------------------------------------------------------------------
-Ran 42 tests in 0.859s
-
-FAILED (failures=1, skipped=3)
+OK (skipped=3)

@@ -45,6 +45,7 @@ services:
       DATABASE_URL_FILE: /run/secrets/database_url
       PROVIDER_API_KEY_FILE: /run/secrets/provider_api_key
   proxy:
+    group_add: ['10002']
     build:
       context: .
       dockerfile: proxy/Dockerfile
@@ -59,7 +60,7 @@ services:
     ports: [127.0.0.1:8080:8080]
     volumes:
       - haproxy-runtime:/run/haproxy
-    networks: [app, control]
+    networks: [app, control, edge]
     depends_on:
       stable: {condition: service_healthy}
       # A broken canary must never block startup of the stable path.
@@ -83,7 +84,7 @@ services:
     volumes:
       - ./monitoring/prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
-    networks: [app, control]
+    networks: [app, control, edge]
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -103,14 +104,14 @@ services:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
-    networks: [control]
+    networks: [control, edge]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
   ops:
     image: python:3.12-slim
     group_add: ['10002']
     profiles: [tools]
-    entrypoint: [python, -B, /scripts/operator.py]
+    entrypoint: [python, -B, /scripts/canary_ops.py]
     environment:
       PYTHONDONTWRITEBYTECODE: '1'
       HAPROXY_SOCKET: /run/haproxy/admin.sock
@@ -129,7 +130,7 @@ services:
     group_add: ['10002']
     profiles: [automation]
     restart: unless-stopped
-    entrypoint: [python, -B, /scripts/operator.py]
+    entrypoint: [python, -B, /scripts/canary_ops.py]
     command: [watch, --auto-rollback]
     environment:
       PYTHONDONTWRITEBYTECODE: '1'
@@ -148,6 +149,8 @@ services:
       prometheus: {condition: service_started}
 
 networks:
+  edge:
+    # A non-internal network permits the explicitly loopback-bound host ports.
   app:
     internal: true
   control:

@@ -1,11 +1,11 @@
 # Submission fields
 
-Publish this repository as a **public GitHub repository**. Inspect it for accidental sensitive content before publishing. A login-required/private repository and localhost links cannot be reviewed by the evaluator.
+Repository: **https://github.com/petergao87/flexpay-canary**. It must remain public for the evaluator. A login-required/private repository and localhost links cannot be reviewed.
 
 | Form field | Value |
 |---|---|
-| Deliverable URL | The public GitHub repository URL |
-| GitHub Repository URL (optional) | The same public GitHub repository URL |
+| Deliverable URL | https://github.com/petergao87/flexpay-canary |
+| GitHub Repository URL (optional) | https://github.com/petergao87/flexpay-canary |
 | Notes (optional) | Use the text below |
 
 ## Suggested notes

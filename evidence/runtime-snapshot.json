@@ -1,0 +1,58 @@
+{
+  "timestamp_utc": "2026-10-13T14:59:18.0311736+00:00",
+  "stable": {
+    "version": "v1.9",
+    "simulated": true
+  },
+  "canary": {
+    "version": "v2.0",
+    "simulated": true
+  },
+  "prometheus_targets": [
+    {
+      "job": "haproxy",
+      "slot": null,
+      "health": "up",
+      "last_error": ""
+    },
+    {
+      "job": "prometheus",
+      "slot": null,
+      "health": "up",
+      "last_error": ""
+    },
+    {
+      "job": "transaction-engine",
+      "slot": "stable",
+      "health": "up",
+      "last_error": ""
+    },
+    {
+      "job": "transaction-engine",
+      "slot": "canary",
+      "health": "up",
+      "last_error": ""
+    }
+  ],
+  "grafana": {
+    "database": "ok",
+    "version": "13.2.2",
+    "commit": "1bea008f7e4e858b6824c9e364d608bd4d10b13a"
+  },
+  "route": {
+    "canary": {
+      "status": "UP",
+      "weight": 5
+    },
+    "canary_percentage": 5.0,
+    "route_available": true,
+    "stable": {
+      "status": "UP",
+      "weight": 95
+    },
+    "stable_fallback": {
+      "status": "UP",
+      "weight": 100
+    }
+  }
+}

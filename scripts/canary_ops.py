@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Local, mock-only canary operations; no Docker daemon privileges required."""
+"""Local, mock-only canary operations; no Docker daemon privileges required.
+
+Use a unique filename so direct script execution cannot shadow Python's
+standard-library operator module during argparse imports.
+"""
 
 import argparse
 import concurrent.futures
@@ -438,9 +442,9 @@ def positive_float(value):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    traffic_parser = commands.add_parser("traffic", help="set canary percentage; >10% increases require approval and healthy samples")
+    traffic_parser = commands.add_parser("traffic", help="set canary percentage; >10%% increases require approval and healthy samples")
     traffic_parser.add_argument("percentage", type=int)
-    traffic_parser.add_argument("--approve", action="store_true", help="record that a human approved promotion beyond 10%; this is not authentication")
+    traffic_parser.add_argument("--approve", action="store_true", help="record that a human approved promotion beyond 10%%; this is not authentication")
     commands.add_parser("rollback", help="restore stable=100 before disabling canary")
     commands.add_parser("status", help="print current HAProxy server health and weights")
     commands.add_parser("analyze", help="evaluate current Prometheus data; exit 1 unless healthy")

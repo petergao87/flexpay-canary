@@ -9,6 +9,7 @@ __pycache__/
 .tools/
 .cache/
 .ci/
+.local/
 *.log
 evidence/local-*.json
 *.zip

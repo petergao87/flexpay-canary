@@ -1,0 +1,1 @@
+{"actual_rps": 29.5, "completed": 600, "elapsed_seconds": 20.34, "last_error": null, "mock_only": true, "requested_rps": 30.0, "results": [{"requests": 450, "rps": 22.13, "status": "200", "version": "v1.9"}, {"requests": 150, "rps": 7.38, "status": "200", "version": "v2.0"}], "scheduled": 600}

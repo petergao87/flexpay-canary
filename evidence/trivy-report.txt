@@ -1,0 +1,41 @@
+Unable to find image 'aquasec/trivy:0.75.0' locally
+0.75.0: Pulling from aquasec/trivy
+e2de96513ba9: Already exists
+c716e0146a8a: Pulling fs layer
+08201c795fbc: Pulling fs layer
+e3614b31dd78: Pulling fs layer
+e3614b31dd78: Verifying Checksum
+e3614b31dd78: Download complete
+c716e0146a8a: Verifying Checksum
+c716e0146a8a: Download complete
+c716e0146a8a: Pull complete
+08201c795fbc: Verifying Checksum
+08201c795fbc: Download complete
+08201c795fbc: Pull complete
+e3614b31dd78: Pull complete
+Digest: sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+Status: Downloaded newer image for aquasec/trivy:0.75.0
+2026-10-13T14:37:03Z	INFO	[vulndb] Need to update DB
+2026-10-13T14:37:03Z	INFO	[vulndb] Downloading vulnerability DB...
+2026-10-13T14:37:03Z	INFO	[vulndb] Downloading artifact...	repo="mirror.gcr.io/aquasec/trivy-db:2"
+2026-10-13T14:37:21Z	INFO	[vulndb] Artifact successfully downloaded	repo="mirror.gcr.io/aquasec/trivy-db:2"
+2026-10-13T14:37:21Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-10-13T14:37:32Z	INFO	[python] Licenses acquired from one or more METADATA files may be subject to additional terms. Use `--debug` flag to see all affected packages.
+2026-10-13T14:37:34Z	INFO	Detected OS	family="debian" version="13.7"
+2026-10-13T14:37:34Z	INFO	[debian] Detecting vulnerabilities...	os_version="13" pkg_num=87
+2026-10-13T14:37:34Z	INFO	Number of language-specific files	num=1
+2026-10-13T14:37:34Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-10-13T14:37:34Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.75/guide/scanner/vulnerability#severity-selection for details.
+
+Report Summary
+
+┌──────────────────────────────────────────────────────────────────────┬────────────┬─────────────────┐
+│                                Target                                │    Type    │ Vulnerabilities │
+├──────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ /input/canary.tar (debian 13.7)                                      │   debian   │        0        │
+├──────────────────────────────────────────────────────────────────────┼────────────┼─────────────────┤
+│ usr/local/lib/python3.12/site-packages/pip-25.0.1.dist-info/METADATA │ python-pkg │        0        │
+└──────────────────────────────────────────────────────────────────────┴────────────┴─────────────────┘
+Legend:
+- '-': Not scanned
+- '0': Clean (no security findings detected)

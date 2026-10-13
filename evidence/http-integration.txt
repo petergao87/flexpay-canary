@@ -1,0 +1,8 @@
+test_concurrent_authorizations_finish_and_report_version (test_integration.HttpIntegrationTests.test_concurrent_authorizations_finish_and_report_version) ... ok
+test_health_identifies_version_and_readiness (test_integration.HttpIntegrationTests.test_health_identifies_version_and_readiness) ... ok
+test_invalid_payment_is_4xx (test_integration.HttpIntegrationTests.test_invalid_payment_is_4xx) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.765s
+
+OK

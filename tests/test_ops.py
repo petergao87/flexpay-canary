@@ -3,12 +3,17 @@
 import copy
 import io
 import json
+import os
+import subprocess
+import sys
+import tempfile
 import unittest
 from contextlib import contextmanager
 from types import SimpleNamespace
+from pathlib import Path
 from unittest.mock import patch
 
-from scripts.operator import (
+from scripts.canary_ops import (
     CANARY, STABLE, FailureWindow, OperationError, Prometheus,
     Runtime, Server, analyze_observations, load, rollback, traffic,
 )
@@ -299,6 +304,7 @@ class MutationLockTests(unittest.TestCase):
         self.assertEqual(calls, [3, 4])
         close.assert_called_once_with(123)
 
+
     def test_lock_contention_times_out_without_mutation(self):
         def blocked(*_):
             raise BlockingIOError("another process owns the lock")
@@ -310,6 +316,26 @@ class MutationLockTests(unittest.TestCase):
                 with Runtime().mutation_lock():
                     self.fail("contended lock must never enter mutation body")
         close.assert_called_once_with(123)
+
+
+class CliStartupTests(unittest.TestCase):
+    def test_direct_script_help_starts_from_an_unrelated_working_directory(self):
+        root = Path(__file__).resolve().parents[1]
+        local_directory = root / ".local"
+        local_directory.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="ops-cli-test-", dir=local_directory) as directory:
+            environment = dict(os.environ)
+            environment.update({"PYTHONDONTWRITEBYTECODE": "1", "TEMP": directory,
+                                "TMP": directory, "TMPDIR": directory})
+            for command in ([], ["traffic"]):
+                with self.subTest(command=command):
+                    result = subprocess.run(
+                        [sys.executable, "-B", str(root / "scripts/canary_ops.py"), *command, "--help"],
+                        cwd=directory, env=environment, capture_output=True, text=True, timeout=15,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn("traffic", result.stdout)
+                    self.assertNotIn("Traceback", result.stderr)
 
 
 if __name__ == "__main__":

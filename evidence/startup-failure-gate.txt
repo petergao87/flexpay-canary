@@ -1,0 +1,4 @@
+ Container flexpay-canary-ops-run-e8ac58dea9ee Creating
+ Container flexpay-canary-ops-run-e8ac58dea9ee Created
+Runtime weight changes are sequential; a healthy route remains during transition
+ERROR: Both stable and canary must be UP before increasing canary traffic

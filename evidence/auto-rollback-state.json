@@ -1,0 +1,1 @@
+{"canary": {"status": "UP", "weight": 0}, "canary_percentage": 0.0, "route_available": true, "stable": {"status": "UP", "weight": 100}, "stable_fallback": {"status": "UP", "weight": 100}}

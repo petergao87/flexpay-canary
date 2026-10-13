@@ -144,6 +144,8 @@ pipeline {
                         test -n "$stable_id" && test -n "$proxy_id"
                         test "$(docker inspect --format '{{.State.Running}}' "$stable_id")" = true
                         test "$(docker inspect --format '{{.State.Health.Status}}' "$stable_id")" = healthy
+                        test "$(docker inspect --format '{{.State.Running}}' "$proxy_id")" = true
+                        test "$(docker inspect --format '{{.State.Health.Status}}' "$proxy_id")" = healthy
                         docker inspect --format '{{.Image}}' "$stable_id"
                     ''', returnStdout: true).trim()
                     writeFile file: '.ci/rollback-stable-image-id.txt', text: env.STABLE_IMAGE + '\n'
@@ -183,10 +185,10 @@ pipeline {
             steps {
                 sh '''
                     set -eu
-                    docker compose run --rm ops load --duration 240 --rps 30
+                    docker compose run --rm ops load --duration 300 --rps 30
                     docker compose run --rm ops analyze
                     docker compose run --rm ops traffic 10
-                    docker compose run --rm ops load --duration 240 --rps 30
+                    docker compose run --rm ops load --duration 300 --rps 30
                     docker compose run --rm ops analyze
                     docker compose run --rm ops status
                 '''
@@ -208,12 +210,12 @@ pipeline {
                 sh '''
                     set -eu
                     # An approval wait may expire the prior 5m sample window.
-                    docker compose run --rm ops load --duration 240 --rps 30
+                    docker compose run --rm ops load --duration 300 --rps 30
                     docker compose run --rm ops analyze
                     # Each step rechecks readiness, sample size, errors and P95.
                     for percentage in 25 50 100; do
                         docker compose run --rm ops traffic "$percentage" --approve
-                        docker compose run --rm ops load --duration 240 --rps 30
+                        docker compose run --rm ops load --duration 300 --rps 30
                         docker compose run --rm ops analyze
                     done
                     docker compose run --rm ops status > .ci/final-traffic-state.txt

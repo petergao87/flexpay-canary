@@ -1,0 +1,4 @@
+{"event":"started","version":"v2.0","port":8080,"ready":true,"simulated":true}
+{"event":"draining","version":"v2.0","signal":15}
+{"event":"authorization","version":"v2.0","status":200,"duration_ms":1503.342}
+{"event":"drained","version":"v2.0","inflight":0}

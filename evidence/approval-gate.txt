@@ -1,0 +1,4 @@
+ Container flexpay-canary-ops-run-7ce7c1460e06 Creating
+ Container flexpay-canary-ops-run-7ce7c1460e06 Created
+Runtime weight changes are sequential; a healthy route remains during transition
+ERROR: Traffic above 10% requires explicit manual approval: add --approve

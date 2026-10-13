@@ -8,6 +8,7 @@ __pycache__
 .tools
 .cache
 .ci
+.local
 tests
 evidence
 *.zip

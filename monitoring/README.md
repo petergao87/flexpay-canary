@@ -26,7 +26,7 @@ The dashboard shows actual traffic percentages as well as configured server weig
 
 ## Health and rollback policy
 
-Promotion requires both backends to be ready, the expected telemetry to be present, and at least **100 canary requests in the last 5 minutes**. The initial 5% phase needs enough overall traffic to establish that sample. At 30 RPS, a four-minute mock load generates approximately 360 canary requests at 5%; statistical variation still applies. After 100% rollout, stable remains ready at weight zero and stable traffic samples naturally decay.
+Promotion requires both backends to be ready, the expected telemetry to be present, and at least **100 canary requests in the last 5 minutes**. The initial 5% phase needs enough overall traffic to establish that sample. At 30 RPS, a five-minute mock load generates approximately 450 canary requests at 5%; statistical variation still applies. After 100% rollout, stable remains ready at weight zero and stable traffic samples naturally decay.
 
 | Condition | Rule duration | Operator response |
 | --- | --- | --- |
@@ -59,9 +59,9 @@ Set `APPROVER` to Peter's actual Jenkins user ID or a controlled approver group.
 
 The pipeline lints both Dockerfiles, validates Prometheus configuration, builds a unique `build-<BUILD_NUMBER>-<commit>` image tag, runs tests without mounted credentials, and scans an exported image with Trivy. It fails on **fixable HIGH/CRITICAL vulnerabilities**; `--ignore-unfixed` is a documented demo trade-off. Trivy gets the image archive, not the Docker socket. Test summaries, scan output, the candidate image ID and retained stable image ID are archived as Jenkins artifacts.
 
-Before deployment, the pipeline captures the actual stable image **ID**, restores stable traffic, and updates only canary with `--no-deps --no-build --wait`. It uses the candidate image ID for deployment, so later tag changes cannot select a different artifact. Readiness must also pass at HAProxy. Each traffic stage gets four minutes of 30-RPS mock load, followed by an explicit health analysis: **5% → 10% → approval → 25% → 50% → 100%**. Failure or approval timeout after staging begins attempts a traffic-only rollback. Stable and proxy containers, stable image, secrets and Docker volumes are retained; the pipeline never runs whole-stack `down` or image pruning.
+Before deployment, the pipeline captures the actual stable image **ID**, restores stable traffic, and updates only canary with `--no-deps --no-build --wait`. It uses the candidate image ID for deployment, so later tag changes cannot select a different artifact. Readiness must also pass at HAProxy. Each traffic stage gets five minutes of 30-RPS mock load, followed by an explicit health analysis: **5% → 10% → approval → 25% → 50% → 100%**. After 100%, analysis uses absolute canary thresholds and current canary/proxy scrape health, without requiring fresh stable traffic. Failure or approval timeout after staging begins attempts a traffic-only rollback. Stable and proxy containers, stable image, secrets and Docker volumes are retained; the pipeline never runs whole-stack `down` or image pruning.
 
-After the manual promotion approval, another four-minute sample at 10% refreshes evidence that may have expired during the approval wait. The Prometheus rule fixtures verify the sustained threshold duration, low-volume suppression, high P95, missing telemetry, unreachable targets, and valid idle counters.
+After the manual promotion approval, another five-minute sample at 10% refreshes evidence that may have expired during the approval wait. The Prometheus rule fixtures verify the sustained threshold duration, low-volume suppression, high P95, missing telemetry, unreachable targets, and valid idle counters.
 
 This is a staging pipeline definition. It needs an actual Jenkins controller/agent to execute; a local Python or Prometheus check does not prove Jenkins execution. Production would use a trusted image registry and digest deployment, signed artifacts, external secrets, isolated credentials, representative traffic, HA infrastructure, and an independent approval/audit service.
 
